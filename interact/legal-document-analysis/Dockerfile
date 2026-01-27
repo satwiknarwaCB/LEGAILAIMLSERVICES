@@ -18,6 +18,7 @@ COPY requirements.txt dependencies.txt ./
 
 # Install Python dependencies (use dependencies.txt for exact version pinning)
 RUN pip install --no-cache-dir -r dependencies.txt
+RUN pip install --no-cache-dir langchain-groq
 
 # Download spaCy model
 RUN python -m spacy download en_core_web_sm

@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # MongoDB for Auth Service
+  mongodb:
+    image: mongo:latest
+    container_name: auth-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    restart: unless-stopped
+
+  # Authentication Service
+  auth-service:
+    build:
+      context: ./authentication
+      dockerfile: Dockerfile
+    container_name: legal-auth-service
+    ports:
+      - "8080:8080"
+    environment:
+      - MONGODB_URL=mongodb://mongodb:27017
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+    depends_on:
+      - mongodb
+    restart: unless-stopped
+
+  # Chatbot API (Legal Chatbot)
+  chatbot-api:
+    build:
+      context: "./ASK,DRAFT/Legal-Chatbot-Updated"
+      dockerfile: Dockerfile
+    container_name: legal-chatbot-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - "./ASK,DRAFT/Legal-Chatbot-Updated/.env"
+    environment:
+      - APP_ENV=production # Or local if desired, but production uses Groq
+      - MONGODB_URL=mongodb://mongodb:27017
+    restart: unless-stopped
+
+  # Chatbot Frontend (Streamlit)
+  chatbot-frontend:
+    build:
+      context: "./ASK,DRAFT/Legal-Chatbot-Updated"
+      dockerfile: Dockerfile
+    container_name: legal-chatbot-frontend
+    ports:
+      - "8502:8501" # Port 8502 for Chatbot, 8501 for Interact
+    env_file:
+      - "./ASK,DRAFT/Legal-Chatbot-Updated/.env"
+    environment:
+      - BACKEND_URL=http://chatbot-api:8000
+    command: streamlit run main.py --server.port 8501 --server.address 0.0.0.0
+    restart: unless-stopped
+
+  # Interact Backend (Document Analysis)
+  interact-backend:
+    build:
+      context: ./interact/legal-document-analysis
+      dockerfile: Dockerfile
+    container_name: legal-interact-backend
+    ports:
+      - "8001:8000" # Mapping container 8000 to host 8001 to avoid conflict with chatbot
+    env_file:
+      - "./interact/legal-document-analysis/.env"
+    environment:
+      - APP_ENV=production
+    volumes:
+      - ./interact/legal-document-analysis/data:/app/data
+    restart: unless-stopped
+
+  # Interact Frontend (Streamlit)
+  interact-frontend:
+    build:
+      context: ./interact/legal-document-analysis
+      dockerfile: Dockerfile
+    container_name: legal-interact-frontend
+    ports:
+      - "8501:8501"
+    env_file:
+      - "./interact/legal-document-analysis/.env"
+    environment:
+      - BACKEND_URL=http://interact-backend:8000
+    command: streamlit run streamlit_frontend.py --server.port 8501 --server.address 0.0.0.0
+    depends_on:
+      - interact-backend
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
