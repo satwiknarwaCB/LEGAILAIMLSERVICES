@@ -9,6 +9,7 @@ from typing import List, Dict, Optional, Any
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain_ollama import ChatOllama
+from langchain_groq import ChatGroq
 from utils.env_util import EnvironmentVariables
 try:
     from app.models.chronology import Event, EventType, Timeline
@@ -26,16 +27,31 @@ class LLMProcessor:
         # Load env vars
         EnvironmentVariables()
         
-        base_url = EnvironmentVariables.OLLAMA_BASE_URL
-        model = EnvironmentVariables.OLLAMA_MODEL
-        print(f"🔗 Connecting to Ollama at: {base_url}")
+        # Environment-aware LLM initialization
+        app_env = EnvironmentVariables.APP_ENV
         
-        self.llm = ChatOllama(
-            model=model,
-            base_url=base_url,
-            temperature=0,
-            timeout=120
-        )
+        if app_env == "production":
+            print(f"🚀 [Interact] Initializing Groq LLM (Production)")
+            groq_api_key = EnvironmentVariables.GROQ_API_KEY
+            if not groq_api_key:
+                raise ValueError("GROQ_API_KEY missing for production environment")
+            
+            self.llm = ChatGroq(
+                model_name=EnvironmentVariables.GROQ_MODEL,
+                groq_api_key=groq_api_key,
+                temperature=0
+            )
+        else:
+            base_url = EnvironmentVariables.OLLAMA_BASE_URL
+            model = EnvironmentVariables.OLLAMA_MODEL
+            print(f"🏠 [Interact] Connecting to Ollama at: {base_url}")
+            
+            self.llm = ChatOllama(
+                model=model,
+                base_url=base_url,
+                temperature=0,
+                timeout=120
+            )
         
         # Initialize chronology services if available
         if CHRONOLOGY_AVAILABLE:

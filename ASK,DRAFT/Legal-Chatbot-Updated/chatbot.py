@@ -12,6 +12,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from functools import wraps
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_ollama import ChatOllama
+from langchain_groq import ChatGroq
 from langchain_qdrant import QdrantVectorStore
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 from langchain_core.documents import Document
@@ -262,11 +263,9 @@ class ChatbotManager:
     ):
         """Initialize chatbot with comprehensive configuration + custom LLM support"""
         
-        # Store custom LLM settings
-        self.use_custom_llm = use_custom_llm
-        self.custom_llm_url = custom_llm_url
-        self.llm_type = "custom" if use_custom_llm else "ollama"
-        
+        # Initialize LLM based on environment
+        app_env = os.getenv('APP_ENV', 'local')
+
         # Initialize embeddings
         self.embeddings = HuggingFaceEmbeddings(
             model_name=model_name,
@@ -274,7 +273,6 @@ class ChatbotManager:
             encode_kwargs=encode_kwargs or {"normalize_embeddings": True}
         )
         
-        # NEW: Initialize LLM (local Ollama or custom/internal)
         if use_custom_llm and custom_llm_url:
             # Use custom/internal LLM
             logger.info(f"🔧 Initializing CUSTOM LLM: {custom_llm_url}")
@@ -285,10 +283,30 @@ class ChatbotManager:
                 llm_temperature,
                 max_tokens
             )
+            self.llm_type = "custom"
             logger.info(f"✅ Custom LLM initialized: {custom_llm_model_name or llm_model}")
+            
+        elif app_env == 'production':
+            # Use Groq Cloud LLM
+            logger.info("🚀 Initializing Groq Cloud LLM (Production Mode)")
+            groq_api_key = os.getenv("GROQ_API_KEY")
+            if not groq_api_key:
+                logger.error("❌ GROQ_API_KEY not found in environment variables!")
+                raise ValueError("GROQ_API_KEY is required for production mode")
+            
+            # Using a powerful model by default for production
+            production_model = "llama-3.3-70b-versatile"
+            self.llm = ChatGroq(
+                model_name=production_model,
+                temperature=llm_temperature,
+                groq_api_key=groq_api_key
+            )
+            self.llm_type = "groq"
+            logger.info(f"✅ Groq LLM initialized: {production_model}")
+            
         else:
-            # Use Ollama LLM
-            logger.info("🔧 Initializing Ollama LLM")
+            # Use Ollama (Local Mode)
+            logger.info("🏠 Initializing Ollama LLM (Local Mode)")
             base_url = os.getenv('OLLAMA_BASE_URL', 'http://192.168.0.25:11434')
             model = os.getenv('OLLAMA_MODEL', 'qwen2.5:14b')
             logger.info(f"🔗 Connecting to Ollama at: {base_url}")
@@ -299,6 +317,7 @@ class ChatbotManager:
                 base_url=base_url,
                 timeout=120
             )
+            self.llm_type = "ollama"
             logger.info(f"✅ Ollama LLM initialized: {model}")
         
         # FIXED: Initialize Qdrant with persistent collection
