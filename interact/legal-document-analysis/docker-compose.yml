@@ -1,0 +1,51 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: legal-doc-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - WEAVIATE_API_KEY=${WEAVIATE_API_KEY}
+      - WEAVIATE_URL=${WEAVIATE_URL}
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+    command: python run_backend.py
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health').raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: legal-doc-frontend
+    ports:
+      - "8501:8501"
+    environment:
+      - BACKEND_URL=http://backend:8000
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - WEAVIATE_API_KEY=${WEAVIATE_API_KEY}
+      - WEAVIATE_URL=${WEAVIATE_URL}
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+    command: python run_frontend.py
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8501/_stcore/health').raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+

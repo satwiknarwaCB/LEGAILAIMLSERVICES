@@ -1,0 +1,47 @@
+# Core Frameworks
+streamlit
+fastapi
+uvicorn
+python-multipart
+python-dotenv
+requests
+pydantic>=2.0.0,<3.0.0
+
+# LangChain Architecture - PINNED COMPATIBLE VERSIONS (0.2.x series)
+# These versions maintain the old API (langchain.chains, etc.)
+langchain==0.2.16
+langchain-core==0.2.43
+langchain-community==0.2.16
+langchain-ollama==0.1.3
+langchain-text-splitters==0.2.4
+langchain-huggingface==0.0.3
+langchain-qdrant==0.1.4
+
+# Vector Databases
+qdrant-client
+weaviate-client
+
+# Document Processing
+PyPDF2
+pypdfium2
+pytesseract
+pillow
+python-docx
+python-pptx
+reportlab
+spacy>=3.7.0
+
+# Data & Utils
+numpy<2.0.0
+pandas
+tiktoken
+python-dateutil>=2.8.0
+plotly>=5.17.0
+networkx>=3.2.0
+sentence-transformers
+typing-extensions>=4.7
+
+# Authentication
+pymongo
+pyjwt
+bcrypt
