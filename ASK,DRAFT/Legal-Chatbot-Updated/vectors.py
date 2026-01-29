@@ -166,7 +166,7 @@ class EmbeddingsManager:
     
     def __init__(
         self,
-        model_name: str = "BAAI/bge-small-en",
+        model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
         device: str = "cpu",
         encode_kwargs: dict = None,
         qdrant_url: str = None,
@@ -261,9 +261,10 @@ class EmbeddingsManager:
             "BAAI/bge-small-en",
             "BAAI/bge-base-en",
             "sentence-transformers/all-MiniLM-L6-v2",
-            "sentence-transformers/all-mpnet-base-v2"
+            "sentence-transformers/all-mpnet-base-v2",
+            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
         ]
-        return model_name if model_name in allowed_models else "BAAI/bge-small-en"
+        return model_name if model_name in allowed_models else "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     
     def _sanitize_collection_name(self, collection_name: str) -> str:
         """Sanitize collection name for security"""

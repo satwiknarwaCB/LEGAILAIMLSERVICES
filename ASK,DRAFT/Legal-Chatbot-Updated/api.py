@@ -5,8 +5,9 @@ import os
 os.environ['NO_PROXY'] = '192.168.0.56'
 os.environ['no_proxy'] = '192.168.0.56'
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Depends, Header
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Depends, Header, Request, Response
 import jwt
+import httpx
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -57,6 +58,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Constants
+HTTP_CLIENT_TIMEOUT = 120.0
+httpx_client: httpx.AsyncClient = None # Will be initialized on startup
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 ALLOWED_EXTENSIONS = ['pdf', 'txt', 'docx', 'pptx']
 MAX_INTERACTIONS_PER_SESSION = 25
@@ -541,7 +544,7 @@ def auto_embed_documents():
             return False, "No documents found"
         
         embeddings_mgr = EmbeddingsManager(
-            model_name="BAAI/bge-small-en",
+            model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
             device="cpu",
             encode_kwargs={"normalize_embeddings": True},
             qdrant_url=os.getenv('QDRANT_URL'),
@@ -1248,6 +1251,204 @@ async def health_check():
         "collection": PERSISTENT_COLLECTION_NAME,
         "timestamp": datetime.now().isoformat()
     }
+
+# ==================== DOCUMENT CHAT FEATURE ====================
+# New feature: Upload a document and chat about it
+
+from document_chat import get_document_chat_manager, DocumentChatManager
+
+# Pydantic models for document chat
+class DocumentChatRequest(BaseModel):
+    query: str
+    include_legal_knowledge: bool = True
+
+class DocumentChatResponse(BaseModel):
+    success: bool
+    answer: Optional[str] = None
+    document_name: Optional[str] = None
+    sources: Optional[List[Dict[str, Any]]] = None
+    error: Optional[str] = None
+    session_id: Optional[str] = None
+
+class DocumentUploadResponse(BaseModel):
+    success: bool
+    session_id: Optional[str] = None
+    filename: Optional[str] = None
+    char_count: Optional[int] = None
+    chunk_count: Optional[int] = None
+    file_type: Optional[str] = None
+    preview: Optional[str] = None
+    error: Optional[str] = None
+
+@app.post("/api/document-chat/upload", response_model=DocumentUploadResponse)
+async def upload_document_for_chat(
+    file: UploadFile = File(...),
+    user_id: Optional[str] = Depends(verify_token)
+):
+    """
+    Upload a document to chat about it.
+    
+    Supports: PDF, DOCX, TXT, PNG, JPG (with OCR)
+    
+    The document will be processed and you can ask questions about it.
+    """
+    try:
+        # Generate session ID
+        session_id = f"doc_{str(uuid.uuid4())}"
+        if user_id:
+            session_id = f"{user_id}_{session_id}"
+        
+        # Read file content
+        file_content = await file.read()
+        
+        # Get document chat manager
+        session = get_session_manager(user_id)
+        chatbot_mgr = session.get("chatbot_manager")
+        doc_chat_manager = get_document_chat_manager(chatbot_mgr)
+        
+        # Process and upload document
+        result = doc_chat_manager.upload_document(
+            filename=file.filename,
+            file_content=file_content,
+            session_id=session_id
+        )
+        
+        return DocumentUploadResponse(**result)
+        
+    except Exception as e:
+        logger.error(f"Document upload error: {e}")
+        return DocumentUploadResponse(
+            success=False,
+            error=str(e)
+        )
+
+@app.post("/api/document-chat/{session_id}/chat", response_model=DocumentChatResponse)
+async def chat_with_uploaded_document(
+    session_id: str,
+    request: DocumentChatRequest,
+    user_id: Optional[str] = Depends(verify_token)
+):
+    """
+    Chat with an uploaded document.
+    
+    Send questions about the document you uploaded.
+    The AI will answer based on the document content and legal knowledge.
+    """
+    try:
+        # Get document chat manager
+        session = get_session_manager(user_id)
+        chatbot_mgr = session.get("chatbot_manager")
+        doc_chat_manager = get_document_chat_manager(chatbot_mgr)
+        
+        # Chat with document
+        result = doc_chat_manager.chat_with_document(
+            session_id=session_id,
+            query=request.query,
+            include_legal_knowledge=request.include_legal_knowledge
+        )
+        
+        return DocumentChatResponse(**result)
+        
+    except Exception as e:
+        logger.error(f"Document chat error: {e}")
+        return DocumentChatResponse(
+            success=False,
+            error=str(e)
+        )
+
+@app.get("/api/document-chat/{session_id}/info")
+async def get_document_session_info(
+    session_id: str,
+    user_id: Optional[str] = Depends(verify_token)
+):
+    """Get information about a document chat session"""
+    try:
+        doc_chat_manager = get_document_chat_manager()
+        info = doc_chat_manager.get_session_info(session_id)
+        
+        if info:
+            return {"success": True, **info}
+        else:
+            return {"success": False, "error": "Session not found"}
+            
+    except Exception as e:
+        logger.error(f"Get session info error: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.delete("/api/document-chat/{session_id}")
+async def clear_document_session(
+    session_id: str,
+    user_id: Optional[str] = Depends(verify_token)
+):
+    """Clear/delete a document chat session"""
+    try:
+        doc_chat_manager = get_document_chat_manager()
+        success = doc_chat_manager.clear_session(session_id)
+        
+        if success:
+            return {"success": True, "message": "Document session cleared"}
+        else:
+            return {"success": False, "error": "Session not found"}
+            
+    except Exception as e:
+        logger.error(f"Clear session error: {e}")
+        return {"success": False, "error": str(e)}
+
+# ==================== AGENTS PROXY ====================
+# Forward any /api/agents requests to the new Agents service on port 8002
+
+@app.api_route("/api/agents/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+async def proxy_to_agents(path: str, request: Request):
+    """
+    Proxy requests to the Agents service running on port 8002.
+    This allows the frontend to continue using port 8000 for everything.
+    """
+    target_url = f"http://127.0.0.1:8002/api/agents/{path}"
+    
+    # Get original request details
+    method = request.method
+    headers = dict(request.headers)
+    # Remove 'host' to avoid issues with target server
+    headers.pop('host', None)
+    
+    params = dict(request.query_params)
+    body = await request.body()
+    
+    try:
+        proxy_resp = await httpx_client.request(
+            method=method,
+            url=target_url,
+            headers=headers,
+            params=params,
+            content=body
+        )
+            
+        return Response(
+            content=proxy_resp.content,
+            status_code=proxy_resp.status_code,
+            headers=dict(proxy_resp.headers)
+        )
+    except Exception as e:
+        logger.error(f"Proxy error: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": f"Agents service unavailable: {str(e)}"}
+        )
+
+
+# ==================== LIFECYCLE ====================
+
+@app.on_event("startup")
+async def startup_event():
+    global httpx_client
+    httpx_client = httpx.AsyncClient(timeout=HTTP_CLIENT_TIMEOUT)
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    global httpx_client
+    if httpx_client:
+        await httpx_client.aclose()
+
 
 # ==================== RUN SERVER ====================
 

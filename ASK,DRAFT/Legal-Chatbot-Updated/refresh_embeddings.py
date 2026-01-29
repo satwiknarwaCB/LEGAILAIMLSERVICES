@@ -25,7 +25,7 @@ def refresh_embeddings():
         
         # Initialize EmbeddingsManager
         embeddings_mgr = EmbeddingsManager(
-            model_name="BAAI/bge-small-en",
+            model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
             device="cpu",
             encode_kwargs={"normalize_embeddings": True},
             qdrant_url=os.getenv('QDRANT_URL'),

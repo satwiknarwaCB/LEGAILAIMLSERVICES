@@ -1,0 +1,22 @@
+# requirements.txt for Agents Service
+
+# Core
+fastapi>=0.100.0
+uvicorn>=0.22.0
+pydantic>=2.0.0
+python-dotenv
+httpx>=0.24.0
+
+# Auth
+PyJWT>=2.0.0
+
+# LLM Integrations
+langchain-ollama
+langchain-groq
+
+# Document Processing
+PyPDF2
+python-docx
+
+# Logging
+python-json-logger

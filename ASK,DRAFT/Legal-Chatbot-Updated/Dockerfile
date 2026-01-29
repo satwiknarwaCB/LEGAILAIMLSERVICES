@@ -8,6 +8,8 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     tesseract-ocr \
     tesseract-ocr-eng \
+    tesseract-ocr-hin \
+    tesseract-ocr-mar \
     libtesseract-dev \
     && rm -rf /var/lib/apt/lists/*
 

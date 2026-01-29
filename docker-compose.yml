@@ -1,92 +1,44 @@
 version: '3.8'
 
 services:
-  # MongoDB for Auth Service
+  # Master MongoDB for the whole platform
   mongodb:
     image: mongo:latest
-    container_name: auth-mongodb
+    container_name: legal-mongodb
     ports:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
     restart: unless-stopped
 
-  # Authentication Service
-  auth-service:
+  # Master AI Application (All-in-One)
+  # This container runs Auth, Chatbot, Interact, and Agents Services
+  legal-platform:
     build:
-      context: ./authentication
+      context: .
       dockerfile: Dockerfile
-    container_name: legal-auth-service
+    container_name: legal-ai-platform-master
     ports:
-      - "8080:8080"
+      - "8000:8000" # Chatbot API
+      - "8001:8001" # Interact API
+      - "8002:8002" # Agents API
+      - "8080:8080" # Auth Service
+      - "8501:8501" # Interact Frontend
+      - "8502:8502" # Chatbot Frontend
     environment:
       - MONGODB_URL=mongodb://mongodb:27017
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      - APP_ENV=production
+      # Secret keys should be moved to a secure .env file in production
+      - JWT_SECRET_KEY=your-secret-key-change-in-production
+      # API Keys for Cloud Services
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - QDRANT_URL=${QDRANT_URL}
+      - QDRANT_API_KEY=${QDRANT_API_KEY}
     depends_on:
       - mongodb
-    restart: unless-stopped
-
-  # Chatbot API (Legal Chatbot)
-  chatbot-api:
-    build:
-      context: "./ASK,DRAFT/Legal-Chatbot-Updated"
-      dockerfile: Dockerfile
-    container_name: legal-chatbot-api
-    ports:
-      - "8000:8000"
-    env_file:
-      - "./ASK,DRAFT/Legal-Chatbot-Updated/.env"
-    environment:
-      - APP_ENV=production # Or local if desired, but production uses Groq
-      - MONGODB_URL=mongodb://mongodb:27017
-    restart: unless-stopped
-
-  # Chatbot Frontend (Streamlit)
-  chatbot-frontend:
-    build:
-      context: "./ASK,DRAFT/Legal-Chatbot-Updated"
-      dockerfile: Dockerfile
-    container_name: legal-chatbot-frontend
-    ports:
-      - "8502:8501" # Port 8502 for Chatbot, 8501 for Interact
-    env_file:
-      - "./ASK,DRAFT/Legal-Chatbot-Updated/.env"
-    environment:
-      - BACKEND_URL=http://chatbot-api:8000
-    command: streamlit run main.py --server.port 8501 --server.address 0.0.0.0
-    restart: unless-stopped
-
-  # Interact Backend (Document Analysis)
-  interact-backend:
-    build:
-      context: ./interact/legal-document-analysis
-      dockerfile: Dockerfile
-    container_name: legal-interact-backend
-    ports:
-      - "8001:8000" # Mapping container 8000 to host 8001 to avoid conflict with chatbot
-    env_file:
-      - "./interact/legal-document-analysis/.env"
-    environment:
-      - APP_ENV=production
+    # Optional: Volume mount for documents folder if you want persistent local docs
     volumes:
-      - ./interact/legal-document-analysis/data:/app/data
-    restart: unless-stopped
-
-  # Interact Frontend (Streamlit)
-  interact-frontend:
-    build:
-      context: ./interact/legal-document-analysis
-      dockerfile: Dockerfile
-    container_name: legal-interact-frontend
-    ports:
-      - "8501:8501"
-    env_file:
-      - "./interact/legal-document-analysis/.env"
-    environment:
-      - BACKEND_URL=http://interact-backend:8000
-    command: streamlit run streamlit_frontend.py --server.port 8501 --server.address 0.0.0.0
-    depends_on:
-      - interact-backend
+      - ./ASK,DRAFT/Legal-Chatbot-Updated/documents:/app/ASK,DRAFT/Legal-Chatbot-Updated/documents
     restart: unless-stopped
 
 volumes:

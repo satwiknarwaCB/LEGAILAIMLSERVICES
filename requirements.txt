@@ -1,0 +1,52 @@
+# ==============================================
+# MASTER REQUIREMENTS FOR LEGAILAIMLSERVICES (SINGLE-DOCKER)
+# ==============================================
+
+# Core Frameworks
+fastapi>=0.100.0
+uvicorn>=0.22.0
+pydantic>=2.0.0
+python-multipart
+httpx>=0.24.0
+
+# LLM & RAG
+langchain>=0.2.0
+langchain-community>=0.2.0
+langchain-core>=0.2.0
+langchain-ollama
+langchain-groq
+langchain-huggingface
+langchain-qdrant
+langchain-text-splitters
+sentence-transformers
+qdrant-client
+weaviate-client
+
+# Document Processing
+PyPDF2
+pypdfium2
+pytesseract
+pillow
+python-docx
+python-pptx
+reportlab
+
+# Authentication & DB
+pymongo
+PyJWT
+python-dotenv
+cryptography
+
+# Frontend & NLP
+streamlit>=1.25.0
+spacy>=3.7.0
+
+# Process Management
+supervisor
+
+# Utilities
+requests
+python-dateutil
+python-json-logger
+lxml
+typing-extensions

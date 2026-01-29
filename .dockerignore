@@ -1,0 +1,19 @@
+# Exclude local python environment
+venv/
+.env
+__pycache__/
+*.pyc
+
+# Exclude git
+.git/
+.gitignore
+
+# Exclude IDE settings
+.vscode/
+.idea/
+
+# Exclude data/logs
+*.db
+chat_logs.db
+logs/
+data/
